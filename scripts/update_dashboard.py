@@ -39,10 +39,12 @@ ANALYSIS_PROMPT = f"""포트나이트 커뮤니티 동향 분석 전문가로서
 ### 🔮 내일 주목할 점
 
 ---
-응답 마지막에 JSON 추가 (마크다운 없이):
-<<<JSON>>>
+리포트 작성 완료 후 반드시 아래 형식으로 JSON을 출력하세요.
+JSONSTART 와 JSONEND 사이에 JSON만 넣고 다른 텍스트는 절대 포함하지 마세요:
+
+JSONSTART
 {{"sentiment":{{"positive":40,"neutral":30,"negative":30}},"keywords":[{{"word":"키워드1","heat":"hot"}},{{"word":"키워드2","heat":"hot"}},{{"word":"키워드3","heat":"warm"}},{{"word":"키워드4","heat":"warm"}},{{"word":"키워드5","heat":"cool"}}],"issues":[{{"type":"neg","title":"제목","desc":"설명"}},{{"type":"warn","title":"제목","desc":"설명"}},{{"type":"pos","title":"제목","desc":"설명"}}],"issueCount":3}}
-<<<ENDJSON>>>"""
+JSONEND"""
 
 
 def search_and_analyze():
@@ -51,7 +53,6 @@ def search_and_analyze():
 
     print(f"[{TODAY}] 검색 및 분석 시작...")
 
-    # 검색 쿼리를 프롬프트에 포함
     search_context = "\n".join([f"- {q}" for q in SEARCH_QUERIES])
     full_prompt = f"다음 주제들에 대해 최신 정보를 검색하고 분석해주세요:\n{search_context}\n\n{ANALYSIS_PROMPT}"
 
@@ -62,7 +63,6 @@ def search_and_analyze():
         messages=[{"role": "user", "content": full_prompt}]
     )
 
-    # 텍스트 블록 추출
     full_text = "\n".join(
         block.text for block in response.content
         if hasattr(block, "text")
@@ -77,17 +77,30 @@ def parse_response(full_text):
     json_data = None
     report_text = full_text
 
-    match = re.search(r'<<<JSON>>>([\s\S]*?)<<<ENDJSON>>>', full_text)
+    # 1순위: JSONSTART ~ JSONEND 패턴
+    match = re.search(r'JSONSTART\s*([\s\S]*?)\s*JSONEND', full_text)
+
+    # 2순위: <<<JSON>>> ~ <<<ENDJSON>>> 패턴
+    if not match:
+        match = re.search(r'<<<JSON>>>\s*([\s\S]*?)\s*<<<ENDJSON>>>', full_text)
+
+    # 3순위: { 로 시작하는 JSON 블록 직접 추출
+    if not match:
+        match = re.search(r'(\{"sentiment"[\s\S]*?\})\s*$', full_text)
+
     if match:
         try:
-            json_data = json.loads(match.group(1).strip())
-            report_text = full_text.replace(match.group(0), "").strip()
+            raw = match.group(1).strip()
+            json_data = json.loads(raw)
+            report_text = full_text[:match.start()].strip()
             print("JSON 파싱 성공:", json_data)
         except json.JSONDecodeError as e:
             print(f"JSON 파싱 실패: {e}")
+            report_text = full_text[:match.start()].strip()
 
     # 기본값 설정
     if not json_data:
+        print("JSON 없음 — 기본값 사용")
         json_data = {
             "sentiment": {"positive": 40, "neutral": 35, "negative": 25},
             "keywords": [
@@ -182,37 +195,27 @@ def update_html(report_text, json_data):
         for iss in issues
     ])
 
-    # ── HTML 내 자동 업데이트 영역 교체 ──────────────────────────
-    # 1) 리포트 본문
     html = re.sub(
         r'(<!-- AUTO:REPORT_START -->)[\s\S]*?(<!-- AUTO:REPORT_END -->)',
         f'<!-- AUTO:REPORT_START -->\n{report_html}\n<!-- AUTO:REPORT_END -->',
         html
     )
-
-    # 2) 감성 수치
     html = re.sub(r'(id="pctPos">)[^<]*(</span>)', f'\\g<1>{pos}%\\2', html)
     html = re.sub(r'(id="pctNeu">)[^<]*(</span>)', f'\\g<1>{neu}%\\2', html)
     html = re.sub(r'(id="pctNeg">)[^<]*(</span>)', f'\\g<1>{neg}%\\2', html)
     html = re.sub(r'(id="barPos"[^>]*style=")[^"]*(")', f'\\g<1>width:{pos}%\\2', html)
     html = re.sub(r'(id="barNeu"[^>]*style=")[^"]*(")', f'\\g<1>width:{neu}%\\2', html)
     html = re.sub(r'(id="barNeg"[^>]*style=")[^"]*(")', f'\\g<1>width:{neg}%\\2', html)
-
-    # 3) 키워드 목록
     html = re.sub(
         r'(<!-- AUTO:KEYWORDS_START -->)[\s\S]*?(<!-- AUTO:KEYWORDS_END -->)',
         f'<!-- AUTO:KEYWORDS_START -->\n{keywords_html}\n<!-- AUTO:KEYWORDS_END -->',
         html
     )
-
-    # 4) 이슈 목록
     html = re.sub(
         r'(<!-- AUTO:ISSUES_START -->)[\s\S]*?(<!-- AUTO:ISSUES_END -->)',
         f'<!-- AUTO:ISSUES_START -->\n{issues_html}\n<!-- AUTO:ISSUES_END -->',
         html
     )
-
-    # 5) 마지막 업데이트 시각 & 이슈 카운트
     html = re.sub(r'(id="statLastRun">)[^<]*(</div>)', f'\\g<1>{TODAY_SHORT}\\2', html)
     html = re.sub(r'(id="statLastDate">)[^<]*(</div>)', f'\\g<1>자동 업데이트\\2', html)
     html = re.sub(r'(id="statIssues">)[^<]*(</div>)', f'\\g<1>{issue_count}\\2', html)
