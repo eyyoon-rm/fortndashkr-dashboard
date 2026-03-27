@@ -47,7 +47,7 @@ JSONSTART 와 JSONEND 사이에 JSON만 넣으세요.
 키워드와 이슈 제목/설명도 반드시 한국어로 작성하세요:
 
 JSONSTART
-{"sentiment":{"positive":40,"neutral":30,"negative":30},"keywords":[{"word":"한국어키워드1","heat":"hot"},{"word":"한국어키워드2","heat":"hot"},{"word":"한국어키워드3","heat":"warm"},{"word":"한국어키워드4","heat":"warm"},{"word":"한국어키워드5","heat":"cool"}],"issues":[{"type":"neg","title":"한국어제목","desc":"한국어설명"},{"type":"warn","title":"한국어제목","desc":"한국어설명"},{"type":"pos","title":"한국어제목","desc":"한국어설명"}],"issueCount":3}
+{{"sentiment":{{"positive":40,"neutral":30,"negative":30}},"keywords":[{{"word":"한국어키워드1","heat":"hot"}},{{"word":"한국어키워드2","heat":"hot"}},{{"word":"한국어키워드3","heat":"warm"}},{{"word":"한국어키워드4","heat":"warm"}},{{"word":"한국어키워드5","heat":"cool"}}],"issues":[{{"type":"neg","title":"한국어제목","desc":"한국어설명"}},{{"type":"warn","title":"한국어제목","desc":"한국어설명"}},{{"type":"pos","title":"한국어제목","desc":"한국어설명"}}],"issueCount":3}}
 JSONEND"""
 
 
