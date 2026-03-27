@@ -24,9 +24,12 @@ SEARCH_QUERIES = [
 ANALYSIS_PROMPT = """당신은 포트나이트 게임 커뮤니티 동향 분석 전문가입니다.
 모든 내용을 반드시 한국어로만 작성하세요. 영어 문장을 절대 사용하지 마세요.
 
+매우 중요: 각 섹션의 내용은 반드시 완전한 문장으로 이루어진 하나의 문단으로 작성하세요.
+줄바꿈을 최소화하고, 문장이 끊기지 않도록 이어서 작성하세요.
+
 오늘 날짜: {today}
 위에서 웹 검색한 최신 정보를 바탕으로, 오늘 날짜 기준 가장 새로운 이슈와 반응을 중심으로 리포트를 작성하세요.
-각 섹션은 충분히 상세하게 5~7문장으로 작성하세요.
+각 섹션은 완전한 문장 5~7개로 구성된 충실한 단락으로 작성하세요.
 
 [배경 정보]
 - 3/19 구글플레이 복귀(5년7개월만) - 챕터7 시즌2 쇼다운, 진영선택(파운데이션vs얼음왕)
@@ -36,7 +39,7 @@ ANALYSIS_PROMPT = """당신은 포트나이트 게임 커뮤니티 동향 분석
 - 모드 3종 종료: 발리스틱/페스티벌배틀스테이지(4/16), 로켓레이싱(10월)
 - DC/에펨코리아는 크롤링 차단으로 직접수집 불가
 
-다음 형식으로 한국어로만 상세하게 작성하세요:
+다음 형식으로 한국어로만 작성하세요. 각 섹션 제목 다음에 바로 완전한 문단을 작성하세요:
 
 ### 오늘의 핵심 동향
 ### 채널별 반응 요약
@@ -140,35 +143,51 @@ def render_report_html(report_text, sources):
     if jsonstart_pos != -1:
         report_text = report_text[:jsonstart_pos].strip()
 
-    html = '<div class="rpt">'
     lines = report_text.split('\n')
-    in_list = False
+    merged = []
+    current_para = []
 
     for line in lines:
         line = line.strip()
         if not line or line == '---':
-            if in_list:
-                html += '</ul>'
-                in_list = False
-            continue
-        if line.startswith('### '):
-            if in_list:
-                html += '</ul>'
-                in_list = False
-            html += f'<h3>{line[4:]}</h3>'
+            if current_para:
+                merged.append(('p', ' '.join(current_para)))
+                current_para = []
+        elif line.startswith('### '):
+            if current_para:
+                merged.append(('p', ' '.join(current_para)))
+                current_para = []
+            merged.append(('h3', line[4:]))
         elif line.startswith('- ') or line.startswith('* '):
+            if current_para:
+                merged.append(('p', ' '.join(current_para)))
+                current_para = []
+            merged.append(('li', line[2:]))
+        else:
+            current_para.append(line)
+
+    if current_para:
+        merged.append(('p', ' '.join(current_para)))
+
+    html = '<div class="rpt">'
+    in_list = False
+    for tag, content in merged:
+        content = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', content)
+        if tag == 'h3':
+            if in_list:
+                html += '</ul>'
+                in_list = False
+            html += f'<h3>{content}</h3>'
+        elif tag == 'li':
             if not in_list:
                 html += '<ul>'
                 in_list = True
-            content = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', line[2:])
             html += f'<li>{content}</li>'
-        else:
+        elif tag == 'p':
             if in_list:
                 html += '</ul>'
                 in_list = False
-            content = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', line)
             html += f'<p>{content}</p>'
-
     if in_list:
         html += '</ul>'
 
